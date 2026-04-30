@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Bluey Room Party</title>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #74c0fc;
+  font-family: Arial;
+}
+
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  color: white;
+}
+
+input, button {
+  padding: 6px;
+  margin: 2px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+Room: <input id="room">
+Name: <input id="name">
+<button onclick="start()">Join</button>
+</div>
+
+<script>
+
+// 🧠 SIMPLE “ROOM SYNC” (localStorage multiplayer simulation)
+let room = "";
+let name = "";
+let players = {};
+let score = 0;
+
+function start() {
+  room = document.getElementById("room").value;
+  name = document.getElementById("name").value;
+
+  if (!room || !name) return;
+
+  setInterval(sync, 200);
+}
+
+// 🎮 GAME
+class GameScene extends Phaser.Scene {
+
+  preload() {
+    // 🎨 “show-style” soft cartoon assets
+    this.load.image("balloon", "https://i.imgur.com/4AIbQJX.png");
+    this.load.image("house", "https://i.imgur.com/1Q9Z1Zp.png");
+    this.load.image("park", "https://i.imgur.com/8Q2YQ0m.png");
+
+    // 🔊 music + sound
+    this.load.audio("music", "https://cdn.pixabay.com/audio/2022/10/16/audio_7c2c7d6f3a.mp3");
+    this.load.audio("pop", "https://actions.google.com/sounds/v1/cartoon/pop.ogg");
+  }
+
+  create() {
+
+    // 🎵 MUSIC
+    this.music = this.sound.add("music", { loop: true, volume: 0.3 });
+    this.music.play();
+
+    // 🗺️ MAP
+    this.bg = this.add.image(640, 360, "house").setScale(1.5);
+
+    // 🎈 PLAYER
+    this.balloon = this.add.image(640, 300, "balloon").setScale(0.2);
+
+    this.velocity = 2;
+
+    // 🔊 sound
+    this.pop = this.sound.add("pop");
+
+    // 🏆 SCORE
+    this.text = this.add.text(20, 20, "Score: 0", {
+      fontSize: "26px",
+      color: "#fff"
+    });
+
+    // 🧑 CLICK CONTROL
+    this.input.on("pointerdown", () => {
+      this.velocity = -5;
+      score++;
+      this.pop.play();
+    });
+
+    // 🌍 FAKE OTHER PLAYERS DISPLAY
+    this.others = {};
+  }
+
+  update() {
+
+    // 🎮 physics
+    this.balloon.y += this.velocity;
+    this.velocity += 0.15;
+
+    if (this.balloon.y > 650) {
+      this.balloon.y = 300;
+      this.velocity = 2;
+      score = 0;
+    }
+
+    this.text.setText("Score: " + score);
+
+    // 👥 draw fake multiplayer
+    let data = JSON.parse(localStorage.getItem("room_" + room) || "{}");
+
+    for (let p in data) {
+      if (p !== name) {
+
+        if (!this.others[p]) {
+          this.others[p] = this.add.circle(200, 200, 18, 0x0000ff);
+        }
+
+        this.others[p].y = data[p].y || 300;
+      }
+    }
+
+    // 🗺️ change map visually
+    if (score % 10 === 0) {
+      this.bg.setTint(0xffffff);
+    }
+  }
+}
+
+// 🌐 SYNC SYSTEM (fake multiplayer room)
+function sync() {
+
+  let data = JSON.parse(localStorage.getItem("room_" + room) || "{}");
+
+  data[name] = {
+    score: score,
+    y: game.scene.scenes[0].balloon.y
+  };
+
+  localStorage.setItem("room_" + room, JSON.stringify(data));
+}
+
+// ⚙️ GAME CONFIG
+const game = new Phaser.Game({
+  type: Phaser.AUTO,
+  width: 1280,
+  height: 720,
+  scene: GameScene,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  }
+});
+
+</script>
+
+</body>
+</html>
