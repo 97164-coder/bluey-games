@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Room Party</title>
+<title>Mini World Multiplayer</title>
 
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
 
@@ -10,8 +10,8 @@
 body {
   margin:0;
   overflow:hidden;
-  background:#74c0fc;
   font-family:Arial;
+  background:#74c0fc;
 }
 
 #ui {
@@ -19,141 +19,159 @@ body {
   top:10px;
   left:10px;
   z-index:10;
+  background:rgba(0,0,0,0.35);
+  padding:10px;
+  border-radius:10px;
   color:white;
 }
 
 input, button {
-  padding:6px;
-  margin:2px;
+  margin:3px;
+  padding:5px;
 }
 </style>
 </head>
 <body>
 
 <div id="ui">
-Room: <input id="room">
-Name: <input id="name">
-<button onclick="startGame()">Join</button>
-<button onclick="switchMap()">Switch Map</button>
+<h3>Mini World</h3>
+
+<input id="room" placeholder="Room Code">
+<input id="name" placeholder="Name">
+
+<button onclick="joinRoom()">Join / Create</button>
+<button onclick="switchMap()">Map</button>
+<button onclick="switchGame()">Game</button>
+
+<p id="status">Offline</p>
 </div>
 
 <script>
 
-// 🧠 LOCAL ROOM SYSTEM
+// 🌐 WORLD STATE
 let room = "";
 let name = "";
-let score = 0;
-let map = "house";
+let gameMode = "balloon";
+let map = 0;
 
-let roomData = JSON.parse(localStorage.getItem("rooms") || "{}");
+let world = JSON.parse(localStorage.getItem("WORLD_DATA") || "{}");
 
-// 🎮 JOIN GAME
-function startGame() {
+// 🧑 JOIN OR CREATE ROOM
+function joinRoom() {
   room = document.getElementById("room").value;
   name = document.getElementById("name").value;
 
   if (!room || !name) return;
 
-  if (!roomData[room]) roomData[room] = {};
+  if (!world[room]) world[room] = {players:{}};
 
-  roomData[room][name] = {score:0,y:300};
+  world[room].players[name] = {
+    score:0,
+    y:300
+  };
 
-  localStorage.setItem("rooms", JSON.stringify(roomData));
+  save();
 
-  document.getElementById("ui").style.display = "none";
+  document.getElementById("status").innerText =
+    `Room: ${room} | Player: ${name}`;
 }
 
-// 🗺️ SWITCH MAP
+// 🗺️ MAP SWITCH
 function switchMap() {
-  map = map === "house" ? "park" : "house";
+  map = (map + 1) % 3;
 }
 
-// 🎮 GAME SCENE
-class MainScene extends Phaser.Scene {
+// 🎮 SWITCH GAME
+function switchGame() {
+  gameMode = gameMode === "balloon" ? "catch" : "balloon";
+}
+
+// 💾 SAVE WORLD
+function save() {
+  localStorage.setItem("WORLD_DATA", JSON.stringify(world));
+}
+
+// 🎮 GAME
+class Scene extends Phaser.Scene {
 
   preload() {
-    this.load.image("balloon", "https://i.imgur.com/4AIbQJX.png");
-    this.load.image("house", "https://i.imgur.com/1Q9Z1Zp.png");
-    this.load.image("park", "https://i.imgur.com/8Q2YQ0m.png");
+    this.load.image("balloon","https://labs.phaser.io/assets/sprites/red_balloon.png");
 
-    this.load.audio("pop", "https://actions.google.com/sounds/v1/cartoon/pop.ogg");
+    this.load.image("bg0","https://labs.phaser.io/assets/skies/sky4.png");
+    this.load.image("bg1","https://labs.phaser.io/assets/skies/sky2.png");
+    this.load.image("bg2","https://labs.phaser.io/assets/skies/sky1.png");
+
+    this.load.audio("pop","https://actions.google.com/sounds/v1/cartoon/pop.ogg");
   }
 
   create() {
 
-    this.bg = this.add.image(640,360,"house").setScale(1.5);
+    this.bg = this.add.image(640,360,"bg0").setScale(1.5);
 
-    this.balloon = this.add.image(640,300,"balloon").setScale(0.2);
+    this.player = this.add.image(640,300,"balloon").setScale(0.2);
 
-    this.velocity = 2;
+    this.vel = 2;
 
     this.pop = this.sound.add("pop");
 
-    this.scoreText = this.add.text(20,20,"Score: 0",{fontSize:"26px",color:"#fff"});
-
-    this.lbText = this.add.text(900,50,"Leaderboard",{fontSize:"20px",color:"#fff"});
+    this.scoreText = this.add.text(20,20,"Score: 0",{fontSize:"24px",color:"#fff"});
+    this.lbText = this.add.text(850,50,"",{fontSize:"18px",color:"#fff"});
 
     this.input.on("pointerdown", () => {
-      this.velocity = -5;
-      score++;
+
+      if (!room || !name) return;
+
+      this.vel = -5;
       this.pop.play();
-      this.save();
+
+      world[room].players[name].score++;
+      save();
     });
   }
 
   update() {
 
-    this.balloon.y += this.velocity;
-    this.velocity += 0.15;
+    // 🎮 GAMEPLAY
+    if (gameMode === "balloon") {
+      this.player.y += this.vel;
+      this.vel += 0.15;
 
-    if (this.balloon.y > 650) {
-      this.balloon.y = 300;
-      this.velocity = 2;
-      score = 0;
+      if (this.player.y > 650) {
+        this.player.y = 300;
+        this.vel = 2;
+      }
     }
 
-    this.scoreText.setText("Score: " + score);
+    // 🗺️ MAPS
+    this.bg.setTexture("bg" + map);
 
-    // 🗺️ MAP CHANGE
-    this.bg.setTexture(map === "house" ? "house" : "park");
-
-    this.loadRoom();
+    this.render();
   }
 
-  save() {
-    let data = JSON.parse(localStorage.getItem("rooms") || "{}");
+  render() {
 
-    if (!data[room]) data[room] = {};
-    data[room][name] = {score:score,y:this.balloon.y};
+    if (!world[room]) return;
 
-    localStorage.setItem("rooms", JSON.stringify(data));
-  }
-
-  loadRoom() {
-
-    let data = JSON.parse(localStorage.getItem("rooms") || "{}");
-    let players = data[room] || {};
-
-    let text = "Leaderboard\n";
-
-    let sorted = Object.entries(players)
+    let list = Object.entries(world[room].players)
       .sort((a,b)=>b[1].score-a[1].score)
       .slice(0,5);
 
-    sorted.forEach(p=>{
-      text += p[0] + ": " + p[1].score + "\n";
+    let text = "Leaderboard\n";
+
+    list.forEach(p=>{
+      text += `${p[0]}: ${p[1].score}\n`;
     });
 
     this.lbText.setText(text);
+    this.scoreText.setText(`Game: ${gameMode}`);
   }
 }
 
-// ⚙️ GAME CONFIG
 new Phaser.Game({
   type: Phaser.AUTO,
   width:1280,
   height:720,
-  scene:MainScene,
+  scene:Scene,
   scale:{
     mode:Phaser.Scale.FIT,
     autoCenter:Phaser.Scale.CENTER_BOTH
